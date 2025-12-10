@@ -5,7 +5,7 @@ from pathlib import Path  # To handle directories
 
 async def download_image(image_url: str) -> bytes:
     """Download image from URL and return bytes"""
-    async with httpx.AsyncClient(timeout=30.0) as http_client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as http_client:
         http_response = await http_client.get(image_url)
         http_response.raise_for_status() # raise exception if request failed
         return http_response.content

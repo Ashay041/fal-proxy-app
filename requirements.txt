@@ -1,0 +1,5 @@
+fastapi>=0.100.0    #fastapi framework
+uvicorn[standard]>=0.24.0    #uvicorn server
+httpx>=0.25.0    #http client for async requests
+python-dotenv>=1.0.0    #set environment variables
+fal-client>=0.4.0    #fal client

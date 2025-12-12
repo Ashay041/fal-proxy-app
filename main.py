@@ -3,8 +3,13 @@ from pydantic import BaseModel, HttpUrl
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv # load environment variables from .env file
 
+# Import services
 from services.image_service import download_image, save_image
 from services.fal_service import kontext_blocking, kontext_nonblocking, kontext_blocking_mock, kontext_nonblocking_mock
+
+# Import database
+from services.database import engine, Base
+from services import models
 
 # Load API key from environment
 load_dotenv()
@@ -13,6 +18,9 @@ load_dotenv()
 # FAL_KEY = os.getenv("FAL_KEY")
 # if not FAL_KEY:
 #     raise ValueError("FAL_KEY not found in .env file!")
+
+# Create all tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="fal proxy app")
 

@@ -7,3 +7,21 @@ services:
       - .env
     volumes:
       - ./uploads:/app/uploads
+    depends_on:
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql://faluser:falpassword@postgres:5432/faldb
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=faluser
+      - POSTGRES_PASSWORD=falpassword
+      - POSTGRES_DB=faldb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:

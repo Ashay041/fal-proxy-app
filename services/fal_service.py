@@ -1,14 +1,5 @@
 import fal_client # fal client for fal.ai
 import os # for environment variables
-from dotenv import load_dotenv # load environment variables from .env file
-
-# Load API key from environment
-load_dotenv()
-
-#TODO: un comment later when you have fal key
-# FAL_KEY = os.getenv("FAL_KEY")
-# if not FAL_KEY:
-#     raise ValueError("FAL_KEY not found in .env file!")
 
 # there are 2 ways to call fal.ai or the client
 # 1. using fal_client.subscribe (blocking call)

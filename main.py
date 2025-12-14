@@ -1,137 +1,116 @@
 from fastapi import FastAPI
 from pydantic import BaseModel, HttpUrl
-from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv # load environment variables from .env file
+from dotenv import load_dotenv
 import os
-# Import services
-from services.image_service import download_image, save_image
-from services.fal_service import kontext_blocking, kontext_nonblocking, kontext_blocking_mock, kontext_nonblocking_mock
 
-# Import database
+# Internal services
+from services.image_service import download_image, save_image
+from services.fal_service import kontext_blocking, kontext_nonblocking
+
+# Database setup
 from services.database import engine, Base
 from services import models
 
-# Load API key from environment
+# Load environment variables (FAL_KEY, SUPABASE_URL, etc.)
 load_dotenv()
 
-#TODO: un comment later when you have fal key
+# Verify API key exists before starting
 FAL_KEY = os.getenv("FAL_KEY")
 if not FAL_KEY:
-    raise ValueError("FAL_KEY not found in .env file!")
+    raise ValueError("FAL_KEY not found in .env file! App cannot start.")
 
-# Create all tables and starting app
+# Initialize database tables
 Base.metadata.create_all(bind=engine)
+
 app = FastAPI(title="fal proxy app")
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# NOTE: We no longer mount "/uploads" because images are hosted on Supabase Storage.
 
-# Defining what data we expect using pydantic
 class ImageRequest(BaseModel):
-    image_url: HttpUrl  # Validates it's actually a URL
+    image_url: HttpUrl
     prompt: str
-
 
 @app.get("/")
 async def root():
     return {"message": "fal proxy app is running"}
 
-
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
 
-
-@app.post("/kontext")
-async def kontext_proxy(request: ImageRequest):
-    """Complete proxy - synchronous fal.ai call"""
-    # Download user's input image from their URL
-    user_input_image_bytes = await download_image(str(request.image_url))
+@app.post("/kontext-sync")
+async def kontext_sync_proxy(request: ImageRequest):
+    """
+    Synchronous Proxy Endpoint:
+    1. Downloads image from User.
+    2. Uploads to Supabase to get a Public URL.
+    3. Sends Public URL + Prompt to Fal.ai.
+    4. Downloads Fal.ai result -> Uploads to Supabase -> Returns Public URL to User.
+    """
+    # 1. Acquire the raw bytes from the user's provided URL
+    user_source_image_bytes = await download_image(str(request.image_url))
     
-    # Save to our storage and get the filename
-    stored_input_filename = await save_image(user_input_image_bytes)
-    # TODO: local-host url
-    proxy_input_image_url = f"http://localhost:8000/uploads/{stored_input_filename}"
+    # 2. Upload to our cloud storage (Supabase) and get a URL that Fal.ai can access
+    public_input_image_url = await save_image(user_source_image_bytes)
     
-    # #TODO: remove this, it is mock function for testing
-    # fal_api_response = kontext_blocking_mock(
-    #     image_url=proxy_input_image_url,
-    #     prompt=request.prompt
-    # )
-
-    #Call fal.ai with our proxy URL
+    # 3. Trigger the Fal.ai inference using our public URL
     fal_api_response = kontext_blocking(
-        image_url=proxy_input_image_url,
+        image_url=public_input_image_url,
         prompt=request.prompt
     )
-    #TODO: remove this
-    #print(fal_api_response)
     
-    # Download and save fal.ai's generated output images
-    proxy_response_images = []
-    for generated_image in fal_api_response.get("images", []):
-        # Download each generated image from fal.ai
-        generated_image_bytes = await download_image(generated_image["url"])
+    # 4. Process the results
+    processed_response_images = []
+    
+    for remote_image_data in fal_api_response.get("images", []):
+        remote_image_url = remote_image_data["url"]
         
-        # Save to our storage
-        generated_image_filename = await save_image(generated_image_bytes)
+        # Download the generated asset
+        generated_asset_bytes = await download_image(remote_image_url)
         
-        # Build our proxy URL for the generated image
-        proxy_generated_image_url = f"http://localhost:8000/uploads/{generated_image_filename}"
+        # Persist to our storage (Supabase)
+        public_generated_url = await save_image(generated_asset_bytes)
         
-        proxy_response_images.append({
-            "url": proxy_generated_image_url,
-            "width": generated_image.get("width"),
-            "height": generated_image.get("height")
+        processed_response_images.append({
+            "url": public_generated_url,
+            "width": remote_image_data.get("width"),
+            "height": remote_image_data.get("height")
         })
     
     return {
-        "images": proxy_response_images,
+        "images": processed_response_images,
         "prompt": fal_api_response.get("prompt")
     }
 
-
 @app.post("/kontext-async")
 async def kontext_proxy_async(request: ImageRequest):
-    """Complete proxy - async fal.ai call"""
-    # Download user's input image from their URL
-    user_input_image_bytes = await download_image(str(request.image_url))
+    """
+    Asynchronous Proxy Endpoint.
+    Same logic as /kontext-sync but uses non-blocking Fal.ai submission.
+    """
+    user_source_image_bytes = await download_image(str(request.image_url))
+    public_input_image_url = await save_image(user_source_image_bytes)
     
-    # Save to our storage and get the filename
-    stored_input_filename = await save_image(user_input_image_bytes)
-    proxy_input_image_url = f"http://localhost:8000/uploads/{stored_input_filename}"
-    
-    # #TODO: remove this, it is mock function for testing
-    # fal_api_response = await kontext_nonblocking_mock(
-    #     image_url=proxy_input_image_url,
-    #     prompt=request.prompt
-    # )
-    
-    #TODO: uncomment this when fal.ai is ready
-    #Call fal.ai with async version
+    # Use the async/non-blocking version of the service
     fal_api_response = await kontext_nonblocking(
-        image_url=proxy_input_image_url,
+        image_url=public_input_image_url,
         prompt=request.prompt
     )
     
-    # Download and save fal.ai's generated output images
-    proxy_response_images = []
-    for generated_image in fal_api_response.get("images", []):
-        # Download each generated image from fal.ai
-        generated_image_bytes = await download_image(generated_image["url"])
+    processed_response_images = []
+    for remote_image_data in fal_api_response.get("images", []):
+        remote_image_url = remote_image_data["url"]
         
-        # Save to our storage
-        generated_image_filename = await save_image(generated_image_bytes)
+        generated_asset_bytes = await download_image(remote_image_url)
+        public_generated_url = await save_image(generated_asset_bytes)
         
-        # Build our proxy URL for the generated image
-        proxy_generated_image_url = f"http://localhost:8000/uploads/{generated_image_filename}"
-        
-        proxy_response_images.append({
-            "url": proxy_generated_image_url,
-            "width": generated_image.get("width"),
-            "height": generated_image.get("height")
+        processed_response_images.append({
+            "url": public_generated_url,
+            "width": remote_image_data.get("width"),
+            "height": remote_image_data.get("height")
         })
     
     return {
-        "images": proxy_response_images,
+        "images": processed_response_images,
         "prompt": fal_api_response.get("prompt")
     }

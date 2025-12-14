@@ -3,28 +3,20 @@ import os
 import uuid
 from supabase import create_client, Client
 
-# Load Supabase credentials from environment variables
+# Load Supabase credentials
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# Fail fast if credentials are missing
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY in .env file")
 
-# Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def validate_is_jpeg_image(raw_file_bytes: bytes) -> None:
     """
-    Checks the file header to ensure the data is a JPEG.
-
-    Why: We are currently restricting the application to JPEGs only to simplify
-    the processing pipeline. This prevents issues with unsupported formats
-    like PNG or WEBP/GIF.
-
-    Raises:
-        ValueError: If the bytes do not match the JPEG signature.
+    Inspects the file header (Magic Bytes) to ensure the data is a JPEG.
+    Raises ValueError if the bytes do not match the JPEG signature.
     """
     # The first 2 bytes of every JPEG file are always FF D8 (hex)
     jpeg_magic_signature = b'\xff\xd8'
@@ -37,18 +29,36 @@ def validate_is_jpeg_image(raw_file_bytes: bytes) -> None:
 
 async def download_image(image_url: str) -> bytes:
     """
-    Downloads raw image bytes from a given URL.
-    Includes headers to prevent 403 Forbidden errors from sites like Wikimedia.
+    Downloads image with TRUE streaming protection.
+    It checks size chunk-by-chunk to prevent memory overflows/crashes.
     """
-    # Define headers to mimic a real browser/valid client
+    # Safety Limit: 100MB
+    MAX_IMAGE_SIZE = 100 * 1024 * 1024 
+    
     headers = {
         "User-Agent": "FalProxyApp/1.0 (Educational Project; +http://localhost:8000)"
     }
     
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as http_client:
-        http_response = await http_client.get(image_url)
-        http_response.raise_for_status()
-        return http_response.content
+        async with http_client.stream("GET", image_url) as response:
+            response.raise_for_status()
+            
+            # 1. Fast Fail: Check header if it exists
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > MAX_IMAGE_SIZE:
+                raise ValueError(f"Image too large ({int(content_length)} bytes). Limit is {MAX_IMAGE_SIZE} bytes.")
+            
+            # 2. Safe Download: Read in chunks (e.g., 8KB at a time)
+            downloaded_data = b""
+            async for chunk in response.aiter_bytes(chunk_size=8192):
+                downloaded_data += chunk
+                
+                # STOP immediately if we exceed the limit
+                if len(downloaded_data) > MAX_IMAGE_SIZE:
+                    raise ValueError(f"Download aborted: Image exceeded {MAX_IMAGE_SIZE} bytes limit.")
+            
+            return downloaded_data
+
 
 async def save_image(image_bytes: bytes) -> str:
     """
@@ -58,12 +68,11 @@ async def save_image(image_bytes: bytes) -> str:
     validate_is_jpeg_image(image_bytes)
 
     # 2. Generate a random filename
-    # We can safely hardcode .jpg now because we validated the content
     unique_filename = f"{uuid.uuid4()}.jpg"
     storage_bucket_name = "fal_images"
 
     # 3. Upload to Supabase Storage
-    # We set upsert=True to overwrite if a file collision theoretically happens
+    # upsert=True overwrites if a file collision theoretically happens
     supabase.storage.from_(storage_bucket_name).upload(
         path=unique_filename,
         file=image_bytes,

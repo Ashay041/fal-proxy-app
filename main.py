@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, HttpUrl
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv # load environment variables from .env file
-
+import os
 # Import services
 from services.image_service import download_image, save_image
 from services.fal_service import kontext_blocking, kontext_nonblocking, kontext_blocking_mock, kontext_nonblocking_mock
@@ -15,15 +15,13 @@ from services import models
 load_dotenv()
 
 #TODO: un comment later when you have fal key
-# FAL_KEY = os.getenv("FAL_KEY")
-# if not FAL_KEY:
-#     raise ValueError("FAL_KEY not found in .env file!")
+FAL_KEY = os.getenv("FAL_KEY")
+if not FAL_KEY:
+    raise ValueError("FAL_KEY not found in .env file!")
 
-# Create all tables
+# Create all tables and starting app
 Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="fal proxy app")
-
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
@@ -51,21 +49,22 @@ async def kontext_proxy(request: ImageRequest):
     
     # Save to our storage and get the filename
     stored_input_filename = await save_image(user_input_image_bytes)
+    # TODO: local-host url
     proxy_input_image_url = f"http://localhost:8000/uploads/{stored_input_filename}"
     
-    #TODO: remove this, it is mock function for testing
-    fal_api_response = kontext_blocking_mock(
-        image_url=proxy_input_image_url,
-        prompt=request.prompt
-    )
-
-    # Call fal.ai with our proxy URL
-    # fal_api_response = kontext_blocking(
+    # #TODO: remove this, it is mock function for testing
+    # fal_api_response = kontext_blocking_mock(
     #     image_url=proxy_input_image_url,
     #     prompt=request.prompt
     # )
+
+    #Call fal.ai with our proxy URL
+    fal_api_response = kontext_blocking(
+        image_url=proxy_input_image_url,
+        prompt=request.prompt
+    )
     #TODO: remove this
-    print(fal_api_response)
+    #print(fal_api_response)
     
     # Download and save fal.ai's generated output images
     proxy_response_images = []
@@ -101,18 +100,18 @@ async def kontext_proxy_async(request: ImageRequest):
     stored_input_filename = await save_image(user_input_image_bytes)
     proxy_input_image_url = f"http://localhost:8000/uploads/{stored_input_filename}"
     
-    #TODO: remove this, it is mock function for testing
-    fal_api_response = await kontext_nonblocking_mock(
-        image_url=proxy_input_image_url,
-        prompt=request.prompt
-    )
-    
-    #TODO: uncomment this when fal.ai is ready
-    # Call fal.ai with async version
-    # fal_api_response = await kontext_nonblocking(
+    # #TODO: remove this, it is mock function for testing
+    # fal_api_response = await kontext_nonblocking_mock(
     #     image_url=proxy_input_image_url,
     #     prompt=request.prompt
     # )
+    
+    #TODO: uncomment this when fal.ai is ready
+    #Call fal.ai with async version
+    fal_api_response = await kontext_nonblocking(
+        image_url=proxy_input_image_url,
+        prompt=request.prompt
+    )
     
     # Download and save fal.ai's generated output images
     proxy_response_images = []

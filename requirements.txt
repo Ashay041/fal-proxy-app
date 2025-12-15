@@ -14,3 +14,6 @@ supabase>=2.0.0
 
 #Redis dependencies
 redis>=5.0.0
+
+#Tenacity dependencies
+tenacity==8.2.3

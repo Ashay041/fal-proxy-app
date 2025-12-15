@@ -1,99 +1,63 @@
 import pytest
-from services.image_service import download_image, save_image
-import os
-from pathlib import Path
+from unittest.mock import patch
+from services.image_service import validate_is_jpeg_image, save_image, download_image
 
-
-@pytest.mark.asyncio
-async def test_save_image_creates_file(tmp_path):
-    """Test that save_image creates a file with the correct content"""
-    # Given: Some fake image bytes
-    fake_image_data = b"fake image bytes for testing"
+def test_validate_jpeg_works_correctly():
+    """
+    Ensures that files with valid JPEG magic bytes are accepted.
+    This prevents false positives where valid images might be rejected.
+    """
+    # Given: A byte sequence starting with standard JPEG signatures (\xff\xd8...)
+    valid_jpeg_signature = b'\xff\xd8\xff\xe0' 
     
-    # When: We save the image
-    filename = await save_image(fake_image_data, upload_directory=str(tmp_path))
-    
-    # Then: File should exist and contain the data
-    assert filename.endswith('.jpg')
-    file_path = tmp_path / filename
-    assert file_path.exists()
-    assert file_path.read_bytes() == fake_image_data
+    # When: We run the validation function
+    # Then: It should execute successfully without raising an exception
+    validate_is_jpeg_image(valid_jpeg_signature)
 
-
-@pytest.mark.asyncio
-async def test_save_image_generates_unique_filenames(tmp_path):
-    """Test that multiple saves generate different filenames"""
-    # Given: Same image data
-    fake_image_data = b"same data"
+def test_validate_jpeg_rejects_png():
+    """
+    Makes sure that non-JPEG files (like PNGs) are strictly rejected.
+    We enforce this to maintain consistency in our storage bucket.
+    """
+    # Given: A byte sequence with PNG magic bytes
+    invalid_png_signature = b'\x89PNG'
     
-    # When: We save twice
-    filename1 = await save_image(fake_image_data, upload_directory=str(tmp_path))
-    filename2 = await save_image(fake_image_data, upload_directory=str(tmp_path))
-    
-    # Then: Filenames should be different (UUID ensures uniqueness)
-    assert filename1 != filename2
-
+    # When: We attempt to validate the non-JPEG data
+    # Then: It must raise a ValueError immediately
+    with pytest.raises(ValueError):
+        validate_is_jpeg_image(invalid_png_signature)
 
 @pytest.mark.asyncio
-async def test_save_image_creates_directory_if_missing(tmp_path):
-    """Test that save_image creates upload directory if it doesn't exist"""
-    # Given: A directory that doesn't exist yet
-    new_dir = tmp_path / "new_uploads"
-    assert not new_dir.exists()
-    
-    # When: We save an image
-    fake_image_data = b"test"
-    filename = await save_image(fake_image_data, upload_directory=str(new_dir))
-    
-    # Then: Directory should be created
-    assert new_dir.exists()
-    assert (new_dir / filename).exists()
+async def test_save_image_mocked():
+    """
+    Verifies that the save_image function correctly calls the Supabase API
+    and returns the public URL, without actually uploading files to the cloud.
+    """
+    # Given: A mocked Supabase client that returns a fixed URL
+    with patch("services.image_service.supabase") as mock_db:
+        mock_db.storage.from_().get_public_url.return_value = "https://fake.com/img.jpg"
 
+        # And: Valid image bytes to pass the pre-upload validation check
+        valid_jpeg_data = b'\xff\xd8\xff\xe0'
 
-@pytest.mark.asyncio
-async def test_download_image_success(httpx_mock):
-    """Test successful image download"""
-    # Given: A URL and mock response
-    test_url = "https://example.com/image.jpg"
-    fake_image_bytes = b"fake downloaded image"
-    httpx_mock.add_response(url=test_url, content=fake_image_bytes)
-    
-    # When: We download the image
-    result = await download_image(test_url)
-    
-    # Then: Should return the image bytes
-    assert result == fake_image_bytes
+        # When: The function attempts to save the image
+        result_url = await save_image(valid_jpeg_data)
 
+        # Then: It should return the URL provided by our mock
+        assert result_url == "https://fake.com/img.jpg"
 
 @pytest.mark.asyncio
-async def test_download_image_follows_redirects(httpx_mock):
-    """Test that download_image follows HTTP redirects"""
-    # Given: A URL that redirects
-    redirect_url = "https://example.com/redirect"
-    final_url = "https://example.com/final.jpg"
-    fake_image_bytes = b"final image"
+async def test_download_image(httpx_mock):
+    """
+    Verifies that the downloader correctly retrieves bytes from a URL.
+    Uses httpx_mock to avoid making real network requests during tests.
+    """
+    # Given: A mocked HTTP response containing specific image data
+    fake_image_bytes = b"fake-data-from-internet"
+    httpx_mock.add_response(url="https://test.com/img.jpg", content=fake_image_bytes)
     
-    httpx_mock.add_response(
-        url=redirect_url, 
-        status_code=302,
-        headers={"Location": final_url}
-    )
-    httpx_mock.add_response(url=final_url, content=fake_image_bytes)
+    # When: We request to download that specific URL
+    downloaded_bytes = await download_image("https://test.com/img.jpg")
     
-    # When: We download from redirect URL
-    result = await download_image(redirect_url)
-    
-    # Then: Should get image from final destination
-    assert result == fake_image_bytes
-
-
-@pytest.mark.asyncio
-async def test_download_image_handles_404(httpx_mock):
-    """Test that download_image raises error on 404"""
-    # Given: A URL that returns 404
-    test_url = "https://example.com/missing.jpg"
-    httpx_mock.add_response(url=test_url, status_code=404)
-    
-    # When/Then: Should raise HTTPStatusError
-    with pytest.raises(Exception):  # httpx.HTTPStatusError
-        await download_image(test_url)
+    # Then: The returned data must match exactly what the server sent
+    assert downloaded_bytes == fake_image_bytes

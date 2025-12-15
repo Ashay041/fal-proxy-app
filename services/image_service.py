@@ -21,23 +21,6 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def validate_is_jpeg_image(raw_file_bytes: bytes) -> None:
-    """
-    Ensure the data is a JPEG.
-    Raises ValueError if the magic bytes do not match the JPEG signature.
-    
-    Why we check magic bytes instead of file extension because:
-    - File extensions can be faked (rename .png to .jpg)
-    - Magic bytes are the first bytes written by image encoders
-    """
-    JPEG_MAGIC_BYTES = b'\xff\xd8'
-
-    if not raw_file_bytes.startswith(JPEG_MAGIC_BYTES):
-        raise ValueError(
-            "Invalid image format. Only JPEG images are supported."
-        )
-
-
 # Retry decorator: Automatically retries 3 times with exponential backoff (1s, 2s, 4s)
 # This handles temporary network failures, timeouts, and server errors
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
@@ -103,28 +86,27 @@ async def download_image(image_url: str) -> bytes:
 
 async def save_image(image_bytes: bytes) -> str:
     """
-    Validates, uploads to Supabase Storage, and returns a public URL.
+    Uploads image to Supabase Storage and returns a public URL.
+    No format validation - fal.ai will validate the image format.
     
     Why we upload to Supabase instead of serving from our server:
     1. fal.ai needs publicly accessible URLs (can't reach localhost)
     2. Supabase provides CDN-backed storage (fast global access)
+    
     Args:
         image_bytes: Raw image data to upload
     Returns:
         str: Public URL to the uploaded image   
     """
-    # Enforce JPEG-only policy
-    validate_is_jpeg_image(image_bytes)
-
     # Generate cryptographically random filename to prevent collisions
-    unique_filename = f"{uuid.uuid4()}.jpg"
+    unique_filename = f"{uuid.uuid4()}"
 
     # Upload to cloud storage
     supabase.storage.from_(STORAGE_BUCKET_NAME).upload(
         path=unique_filename,
         file=image_bytes,
         file_options={
-            "content-type": "image/jpeg",
+            "content-type": "image/jpeg",  # Default content-type
             "upsert": "true"  # Overwrite if UUID collision (extremely rare)
         }
     )

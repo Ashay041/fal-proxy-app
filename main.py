@@ -101,7 +101,7 @@ async def process_kontext_request(request: ImageRequest, fal_model_path: str) ->
         print(f"fal.ai API error: {e}")
         raise HTTPException(
             status_code=503,
-            detail="AI service temporarily unavailable. Please try again in a few moments."
+            detail="fal.ai had a problem"
         )
     
     # STEP 4: Download and upload generated images
@@ -126,8 +126,9 @@ async def process_kontext_request(request: ImageRequest, fal_model_path: str) ->
         print(f"Generated image processing error: {e}")
         raise HTTPException(
             status_code=500,
-            detail="Failed to process generated images. The AI completed but we couldn't save the results."
+            detail="Failed to process generated images. The fal.ai completed but we couldn't save the results."
         )
+        
     
     # Build response
     response_data = {
@@ -135,7 +136,7 @@ async def process_kontext_request(request: ImageRequest, fal_model_path: str) ->
         "prompt": fal_api_response.get("prompt")
     }
 
-    # Save to cache (doesn't need try-catch since cache failures shouldn't break the request)
+    # Step 5: Save to cache (doesn't need try-catch since cache failures shouldn't break the request)
     store_response_in_cache(str(request.image_url), request.prompt, fal_model_path, response_data)
 
     return response_data

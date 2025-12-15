@@ -33,11 +33,11 @@ jobs:
       # We provide DUMMY keys so your app initializes without crashing.
       # Since tests are MOCKED, these keys are never actually used.
       env:
-        FAL_KEY="test"
-        SUPABASE_URL="https://test.co"
-        SUPABASE_KEY="test"
-        DATABASE_URL="postgresql://test"
-        REDIS_URL="rediss://default:test:6379"
+        FAL_KEY: fake_fal_key
+        SUPABASE_URL: https://fake.supabase.co
+        SUPABASE_KEY: fake_supabase_key
+        REDIS_URL: rediss://fake:6379
+        DATABASE_URL: postgresql://fake:5432/db
       run: |
         pytest -v
         echo "System: All tests passed successfully."

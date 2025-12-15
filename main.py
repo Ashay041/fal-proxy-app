@@ -38,7 +38,7 @@ class ImageRequest(BaseModel):
     image_url: HttpUrl
     prompt: str
     
-    # ADD ALL THESE OPTIONAL PARAMETERS
+    # ADD ALL THE OPTIONAL PARAMETERS
     seed: Optional[int] = None
     guidance_scale: Optional[float] = None
     sync_mode: Optional[bool] = None

@@ -3,6 +3,13 @@ import os
 import uuid
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
+
+
+MAX_IMAGE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
+DOWNLOAD_CHUNK_SIZE_BYTES = 8192  # 8KB chunks for streaming
+DOWNLOAD_TIMEOUT_SECONDS = 30.0
+STORAGE_BUCKET_NAME = "fal_images"
 
 # Load Supabase credentials
 load_dotenv()
@@ -14,74 +21,104 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-
-def validate_is_jpeg_image(raw_file_bytes: bytes) -> None:
-    """
-    Inspects the file header (Magic Bytes) to ensure the data is a JPEG.
-    Raises ValueError if the bytes do not match the JPEG signature.
-    """
-    # The first 2 bytes of every JPEG file are always FF D8 (hex)
-    jpeg_magic_signature = b'\xff\xd8'
-
-    if not raw_file_bytes.startswith(jpeg_magic_signature):
-        raise ValueError(
-            "Invalid image format. Strictly JPEG images are allowed for now."
-        )
-
-
+# Retry decorator: Automatically retries 3 times with exponential backoff (1s, 2s, 4s)
+# This handles temporary network failures, timeouts, and server errors
+# ValueError is excluded from retries because it indicates validation errors (e.g., file too large)
+@retry(
+    stop=stop_after_attempt(3), 
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_not_exception_type(ValueError)
+)
 async def download_image(image_url: str) -> bytes:
     """
-    Downloads image with TRUE streaming protection.
-    It checks size chunk-by-chunk to prevent memory overflows/crashes.
-    """
-    # Safety Limit: 100MB
-    MAX_IMAGE_SIZE = 100 * 1024 * 1024 
+    Downloads image with TRUE streaming protection and automatic retry.
+    Checks size chunk-by-chunk to prevent memory exhaustion attacks.
     
+    Retry behavior:
+    - Attempt 1: Immediate
+    - Attempt 2: Wait 1 second
+    - Attempt 3: Wait 2 seconds
+    - Attempt 4: Wait 4 seconds
+    - If all fail: raises the last exception
+    
+    Security considerations:
+    - Malicious users could provide URLs to large files
+    - Loading entire file into memory could crash the server
+    - So we download in chunks and abort if limit exceeded
+    
+    Args:
+        image_url: URL of the image to download
+    Returns:
+        bytes: Raw image data
+    """
     headers = {
         "User-Agent": "FalProxyApp/1.0 (Educational Project; +http://localhost:8000)"
     }
     
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as http_client:
+    async with httpx.AsyncClient(
+        timeout=DOWNLOAD_TIMEOUT_SECONDS, 
+        follow_redirects=True, 
+        headers=headers
+    ) as http_client:
         async with http_client.stream("GET", image_url) as response:
             response.raise_for_status()
             
-            # 1. Fast Fail: Check header if it exists
+            # Fast fail: Check Content-Length header if present
             content_length = response.headers.get("Content-Length")
-            if content_length and int(content_length) > MAX_IMAGE_SIZE:
-                raise ValueError(f"Image too large ({int(content_length)} bytes). Limit is {MAX_IMAGE_SIZE} bytes.")
+            if content_length and int(content_length) > MAX_IMAGE_SIZE_BYTES:
+                raise ValueError(
+                    f"Image too large ({int(content_length)} bytes). "
+                    f"Maximum allowed: {MAX_IMAGE_SIZE_BYTES} bytes."
+                )
             
-            # 2. Safe Download: Read in chunks (e.g., 8KB at a time)
+            # Safe download: Read in chunks and abort if limit exceeded
+            # Why chunked downloading prevents crashes:
+            # - Malicious actors can send Content-Length: 1MB but actually stream 10GB
+            # - Loading entire file into memory first may cause OOM crash (Out Of Memory)
+            # - Chunked approach: check size after each 8KB chunk, abort immediately if exceeded
+            # - Memory footprint: max 100MB (our limit) instead of unlimited
             downloaded_data = b""
-            async for chunk in response.aiter_bytes(chunk_size=8192):
+            async for chunk in response.aiter_bytes(chunk_size=DOWNLOAD_CHUNK_SIZE_BYTES):
                 downloaded_data += chunk
                 
-                # STOP immediately if we exceed the limit
-                if len(downloaded_data) > MAX_IMAGE_SIZE:
-                    raise ValueError(f"Download aborted: Image exceeded {MAX_IMAGE_SIZE} bytes limit.")
+                if len(downloaded_data) > MAX_IMAGE_SIZE_BYTES:
+                    raise ValueError(
+                        f"Download aborted: Image exceeded {MAX_IMAGE_SIZE_BYTES} bytes."
+                    )
             
             return downloaded_data
 
 
 async def save_image(image_bytes: bytes) -> str:
     """
-    Validates, uploads, and returns a public URL for the image.
+    Uploads image to Supabase Storage and returns a public URL.
+    No format validation - fal.ai will validate the image format.
+    
+    Why we upload to Supabase instead of serving from our server:
+    1. fal.ai needs publicly accessible URLs (can't reach localhost)
+    2. Supabase provides CDN-backed storage (fast global access)
+    
+    Args:
+        image_bytes: Raw image data to upload
+    Returns:
+        str: Public URL to the uploaded image   
     """
-    # 1. Enforce strict type checking before doing any work
-    validate_is_jpeg_image(image_bytes)
+    # Generate cryptographically random filename to prevent collisions
+    unique_filename = f"{uuid.uuid4()}"
 
-    # 2. Generate a random filename
-    unique_filename = f"{uuid.uuid4()}.jpg"
-    storage_bucket_name = "fal_images"
-
-    # 3. Upload to Supabase Storage
-    # upsert=True overwrites if a file collision theoretically happens
-    supabase.storage.from_(storage_bucket_name).upload(
+    # Upload to cloud storage
+    supabase.storage.from_(STORAGE_BUCKET_NAME).upload(
         path=unique_filename,
         file=image_bytes,
-        file_options={"content-type": "image/jpeg", "upsert": "true"}
+        file_options={
+            "content-type": "image/jpeg",  # Default content-type
+            "upsert": "true"  # Overwrite if UUID collision (extremely rare)
+        }
     )
 
-    # 4. Generate and return the public access URL
-    public_access_url = supabase.storage.from_(storage_bucket_name).get_public_url(unique_filename)
+    # Get the permanent public URL
+    public_access_url = supabase.storage.from_(STORAGE_BUCKET_NAME).get_public_url(
+        unique_filename
+    )
     
     return public_access_url

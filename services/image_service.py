@@ -3,7 +3,7 @@ import os
 import uuid
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 
 
 MAX_IMAGE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
@@ -23,7 +23,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Retry decorator: Automatically retries 3 times with exponential backoff (1s, 2s, 4s)
 # This handles temporary network failures, timeouts, and server errors
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
+# ValueError is excluded from retries because it indicates validation errors (e.g., file too large)
+@retry(
+    stop=stop_after_attempt(3), 
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_not_exception_type(ValueError)
+)
 async def download_image(image_url: str) -> bytes:
     """
     Downloads image with TRUE streaming protection and automatic retry.

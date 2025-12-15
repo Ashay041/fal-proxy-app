@@ -1,29 +1,41 @@
 import fal_client # fal client for fal.ai
 import os # for environment variables
-from dotenv import load_dotenv # load environment variables from .env file
-
-# Load API key from environment
-load_dotenv()
 
 # there are 2 ways to call fal.ai or the client
 # 1. using fal_client.subscribe (blocking call)
 # 2. Async submit_async (Non-blocking)
 
 # 1. using fal_client.subscribe blocking call
-def call_kontext_sync(image_url: str, prompt: str) -> dict:
+def kontext_blocking(image_url: str, prompt: str) -> dict:
     """
-    Synchronous: Blocks until fal.ai returns result
-    FastAPI runs this in a thread pool
+    Synchronous version - blocks until complete
+    Good for: simple implementation, <100 concurrent users
+    fastapi has around 50 threads only so this is not a good option for production
+    Limited to ~50 simultaneous users
     """
-    result = fal_client.subscribe(
+    fal_api_response = fal_client.subscribe(
         "fal-ai/flux-pro/kontext",
         arguments={
             "prompt": prompt,
             "image_url": image_url,
         },
-        with_logs=False,
+        with_logs=False,    #set to True to get logs and helpful to show progress bar
     )
-    return result
+    return fal_api_response
 
 # 2. Async submit_async (Non-blocking)
-
+async def kontext_nonblocking(image_url: str, prompt: str) -> dict:
+    """
+    Async version - non-blocking
+    Good for: production scale, 1000+ concurrent users
+    """
+    async_job_handler = await fal_client.submit_async(
+        "fal-ai/flux-pro/kontext",
+        arguments={
+            "prompt": prompt,
+            "image_url": image_url,
+        },
+    )
+    
+    fal_api_response = await async_job_handler.get()
+    return fal_api_response

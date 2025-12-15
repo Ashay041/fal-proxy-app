@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
 from dotenv import load_dotenv
 import os
@@ -25,6 +27,9 @@ if not FAL_KEY:
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="fal proxy app")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 class ImageRequest(BaseModel):
@@ -171,6 +176,12 @@ async def process_kontext_request(request: ImageRequest, fal_model_path: str) ->
 
 @app.get("/")
 async def root():
+    """Serve the frontend UI"""
+    return FileResponse("static/index.html")
+
+@app.get("/health")
+async def health():
+    """API health check endpoint"""
     return {"message": "fal proxy app is running, go to /docs# for API documentation"}
 
 @app.post("/kontext")

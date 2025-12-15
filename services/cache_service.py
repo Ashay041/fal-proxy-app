@@ -46,7 +46,7 @@ def retrieve_cached_response(image_url: str, prompt: str):
         cached_json_string = redis_client.get(cache_key)
         
         if cached_json_string:
-            print(f"Cache: Hit found for key {cache_key[:10]}...")
+            print(f"Cache: Hit found for key {cache_key}")
             return json.loads(cached_json_string)
             
     except Exception as read_error:
@@ -68,7 +68,7 @@ def store_response_in_cache(image_url: str, prompt: str, response_data: dict, ex
         
         # Save to Redis with Expiration (setex)
         redis_client.setex(cache_key, expiration_seconds, json_string_to_store)
-        print(f"Cache: Successfully saved result for key {cache_key[:10]}...")
+        print(f"Cache: Successfully saved result for key {cache_key}")
         
     except Exception as write_error:
         print(f"Cache Error: Failed to write to Redis. Details: {write_error}")

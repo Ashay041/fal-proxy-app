@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 from dotenv import load_dotenv
 import os
+from typing import Optional, Literal  # ADD THIS LINE
 
 # Internal services
 from services.image_service import download_image, save_image
@@ -36,6 +37,20 @@ class ImageRequest(BaseModel):
     """
     image_url: HttpUrl
     prompt: str
+    
+    # ADD ALL THESE OPTIONAL PARAMETERS
+    seed: Optional[int] = None
+    guidance_scale: Optional[float] = None
+    sync_mode: Optional[bool] = None
+    num_images: Optional[int] = None
+    output_format: Optional[Literal["jpeg", "png"]] = None
+    enhance_prompt: Optional[bool] = None
+    safety_tolerance: Optional[Literal["1", "2", "3", "4", "5", "6"]] = None
+    aspect_ratio: Optional[Literal["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"]] = None
+    num_inference_steps: Optional[int] = None
+    enable_safety_checker: Optional[bool] = None
+    acceleration: Optional[Literal["none", "regular", "high"]] = None
+    resolution_mode: Optional[Literal["auto", "match_input", "1:1", "16:9", "21:9", "3:2", "2:3", "4:5", "5:4", "3:4", "4:3", "9:16", "9:21"]] = None
 
 # Instead of hardcoding endpoint paths in multiple places, we define them once here.
 FAL_ENDPOINT_CONFIG = {
@@ -89,12 +104,24 @@ async def process_kontext_request(request: ImageRequest, fal_model_path: str) ->
             detail="Failed to upload input image to storage. Please try again."
         )
     
-    # STEP 3: Call fal.ai API
+    # STEP 3: Call fal.ai API - NOW PASS ALL PARAMETERS
     try:
         fal_api_response = await kontext_nonblocking(
             image_url=public_input_image_url,
             prompt=request.prompt,
-            model_path=fal_model_path
+            model_path=fal_model_path,
+            seed=request.seed,
+            guidance_scale=request.guidance_scale,
+            sync_mode=request.sync_mode,
+            num_images=request.num_images,
+            output_format=request.output_format,
+            enhance_prompt=request.enhance_prompt,
+            safety_tolerance=request.safety_tolerance,
+            aspect_ratio=request.aspect_ratio,
+            num_inference_steps=request.num_inference_steps,
+            enable_safety_checker=request.enable_safety_checker,
+            acceleration=request.acceleration,
+            resolution_mode=request.resolution_mode
         )
     except Exception as e:
         # fal.ai API failed after retries

@@ -11,6 +11,9 @@ from services.fal_service import kontext_blocking, kontext_nonblocking
 from services.database import engine, Base
 from services import models
 
+# Cache imports
+from services.cache_service import retrieve_cached_response, store_response_in_cache
+
 # Load environment variables (FAL_KEY, SUPABASE_URL, etc.)
 load_dotenv()
 
@@ -47,6 +50,14 @@ async def kontext_sync_proxy(request: ImageRequest):
     3. Sends Public URL + Prompt to Fal.ai.
     4. Downloads Fal.ai result -> Uploads to Supabase -> Returns Public URL to User.
     """
+    # Before downloading anything, check in the cache if we already know the answer
+    cached_result = retrieve_cached_response(str(request.image_url), request.prompt)
+    
+    if cached_result:
+        # Its a HIT! no Fal.ai bill yay!!!
+        return cached_result
+    
+    # Flow without cache hit
     # 1. Acquire the raw bytes from the user's provided URL
     user_source_image_bytes = await download_image(str(request.image_url))
     

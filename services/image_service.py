@@ -2,8 +2,10 @@ import httpx
 import os
 import uuid
 from supabase import create_client, Client
+from dotenv import load_dotenv
 
 # Load Supabase credentials
+load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 

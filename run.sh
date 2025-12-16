@@ -1,10 +1,8 @@
 #!/bin/bash
 
-# Run docker-compose
+# Stop existing containers gracefully (keeps volumes)
+echo "Stopping existing containers..."
+docker-compose down
+# Start services with rebuild
 echo "Starting services with docker-compose..."
 docker-compose up --build
-
-# TODO: remove this after docker-compose is ready
-# Rebuild and run:
-# docker-compose down
-# docker-compose up --build

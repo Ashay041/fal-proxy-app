@@ -41,4 +41,5 @@ def test_store_handles_redis_disabled():
     Why: Caching is optional; service must remain resilient to infrastructure issues.
     """
     with patch("services.cache_service.redis_client", None):
-        store_response_in_cache("url", "prompt", "model", {"data": "test"})
+        result = store_response_in_cache("url", "prompt", "model", {"data": "test"})
+        assert result is None

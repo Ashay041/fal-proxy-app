@@ -6,10 +6,23 @@ from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 
 
-MAX_IMAGE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
+MAX_IMAGE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit for downloads
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10MB limit for uploads
 DOWNLOAD_CHUNK_SIZE_BYTES = 8192  # 8KB chunks for streaming
 DOWNLOAD_TIMEOUT_SECONDS = 30.0
 STORAGE_BUCKET_NAME = "fal_images"
+
+# Magic bytes for file type detection (first bytes of the file)
+# These are the actual binary signatures that identify the file format
+# Link: https://www.ease.ws/forensics/fileCarving/fileSignatures.html
+MAGIC_BYTES = {
+    "image/jpeg": [
+        bytes([0xFF, 0xD8, 0xFF])  # JPEG signature
+    ],
+    "image/png": [
+        bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])  # PNG signature
+    ]
+}
 
 # Load Supabase credentials
 load_dotenv()
@@ -120,5 +133,59 @@ async def save_image(image_bytes: bytes) -> str:
     public_access_url = supabase.storage.from_(STORAGE_BUCKET_NAME).get_public_url(
         unique_filename
     )
-    
+
     return public_access_url
+
+
+def validate_image_type_from_magic_bytes(file_content: bytes) -> str:
+    """
+    Detects the actual image type by reading the file's magic bytes.
+
+    Magic bytes are the binary signature at the start of a file that identify
+    its true format. This cannot be faked like MIME types or file extensions.
+
+    Args:
+        file_content: The raw bytes of the uploaded file
+
+    Returns:
+        str: The detected MIME type (e.g., "image/jpeg", "image/png")
+
+    Raises:
+        ValueError: If the file is not a valid JPEG or PNG image
+    """
+    # Check each supported format's magic bytes
+    for mime_type, signatures in MAGIC_BYTES.items():
+        for signature in signatures:
+            if file_content.startswith(signature):
+                return mime_type
+
+    # If no magic bytes match, reject the file
+    raise ValueError(
+        "Invalid image file. Only JPEG and PNG images are allowed. "
+        "The file does not have a valid image signature."
+    )
+
+
+def validate_upload_file_size(file_size: int) -> None:
+    """
+    Validates that the uploaded file size is within allowed limits.
+
+    Security considerations:
+    - Prevents users from uploading extremely large files
+    - 10MB limit is reasonable for image uploads
+    - Protects storage quota and processing resources
+
+    Args:
+        file_size: Size of the file in bytes
+
+    Raises:
+        ValueError: If the file size exceeds the limit
+    """
+    if file_size > MAX_UPLOAD_SIZE_BYTES:
+        size_mb = file_size / (1024 * 1024)
+        limit_mb = MAX_UPLOAD_SIZE_BYTES / (1024 * 1024)
+        raise ValueError(
+            f"File size ({size_mb:.2f}MB) exceeds the maximum allowed size of {limit_mb}MB."
+        )
+
+

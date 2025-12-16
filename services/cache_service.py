@@ -92,9 +92,109 @@ def store_response_in_cache(
     try:
         cache_key = generate_unique_request_key(image_url, prompt, model_path)
         json_string = json.dumps(response_data)
-        
+
         redis_client.setex(cache_key, expiration_seconds, json_string)
         print(f"Cache SAVE: {cache_key} (TTL: {expiration_seconds}s)")
-        
+
     except Exception as e:
         print(f"Cache write error: {e}")
+
+
+# ============================================================================
+# Upload-based caching functions (for image_data / base64 uploads)
+# ============================================================================
+
+def generate_unique_request_key_for_upload(image_data: str, prompt: str, model_path: str) -> str:
+    """
+    Creates a cache key for uploaded images by hashing the image data.
+
+    Since image_data is a large base64 string, we hash it to create
+    a stable, compact cache key.
+
+    Args:
+        image_data: Base64 encoded image string
+        prompt: User's prompt
+        model_path: Which fal.ai model to use
+
+    Returns:
+        str: Cache key in format kontext_cache:<hash>
+    """
+    import base64
+
+    # Decode base64 to get actual image bytes for hashing
+    # This ensures different encodings of same image produce same hash
+    image_bytes = base64.b64decode(image_data)
+    image_hash = hashlib.sha256(image_bytes).hexdigest()
+
+    # Create signature using hash instead of raw data
+    input_signature = f"{image_hash}::{prompt}::{model_path}"
+    hashed_signature = hashlib.sha256(input_signature.encode()).hexdigest()
+    cache_key = f"kontext_cache:{hashed_signature}"
+    return cache_key
+
+
+def retrieve_cached_response_for_upload(image_data: str, prompt: str, model_path: str):
+    """
+    Retrieves cached response for uploaded images.
+
+    Same logic as retrieve_cached_response but hashes image_data first.
+
+    Args:
+        image_data: Base64 encoded image string
+        prompt: User's prompt
+        model_path: Which fal.ai model was used
+
+    Returns:
+        dict: Cached response if found
+        None: If cache miss or Redis unavailable
+    """
+    if redis_client is None:
+        return None
+
+    try:
+        cache_key = generate_unique_request_key_for_upload(image_data, prompt, model_path)
+        cached_json_string = redis_client.get(cache_key)
+
+        if cached_json_string:
+            print(f"Cache HIT (upload): {cache_key}")
+            return json.loads(cached_json_string)
+        else:
+            print(f"Cache MISS (upload): {cache_key}")
+
+    except Exception as read_error:
+        print(f"Cache read error (upload): {read_error}")
+
+    return None
+
+
+def store_response_in_cache_for_upload(
+    image_data: str,
+    prompt: str,
+    model_path: str,
+    response_data: dict,
+    expiration_seconds: int = CACHE_TTL_SECONDS
+):
+    """
+    Saves API response to cache for uploaded images.
+
+    Same logic as store_response_in_cache but hashes image_data first.
+
+    Args:
+        image_data: Base64 encoded image string
+        prompt: User's prompt
+        model_path: Which fal.ai model was used
+        response_data: API response to cache
+        expiration_seconds: TTL (default: 1 hour)
+    """
+    if redis_client is None:
+        return
+
+    try:
+        cache_key = generate_unique_request_key_for_upload(image_data, prompt, model_path)
+        json_string = json.dumps(response_data)
+
+        redis_client.setex(cache_key, expiration_seconds, json_string)
+        print(f"Cache SAVE (upload): {cache_key} (TTL: {expiration_seconds}s)")
+
+    except Exception as e:
+        print(f"Cache write error (upload): {e}")

@@ -74,20 +74,18 @@ Built with FastAPI, talks to FAL AI for the actual image generation, uses Redis 
 
 Create a `.env` file in the root directory with the following credentials:
 
-I’m adding my .env file here for ease
+Ask me at koradiaashay@gmail.com for my .env file if you wish to try running locally
 
 ```bash
 # FAL AI Configuration
-FAL_KEY="136236f3-22fa-46d7-8f6e-e019e05ffbc0:17ff757f7bcd6656e9f4c85b02eb82a8"
+FAL_KEY=""
 # Supabase Configuration
-# supabase password: falpassword
-SUPABASE_URL="<https://jexuuibxhabzdhbztpdj.supabase.co>"
-SUPABASE_KEY="sb_publishable_VN_I-gysNySUUcL-zlV3dA_5Qz9Q3nw"
-
+SUPABASE_URL=""
+SUPABASE_KEY=""
 # Neon DB Configuration (optional)
-DATABASE_URL="postgresql://neondb_owner:npg_2OALRMSe7zgw@ep-winter-surf-adjovk4t-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DATABASE_URL=""
 # Redis Configuration (Upstash)
-REDIS_URL="rediss://default:AUuCAAIncDFiNTg3YTk1ODJiNDQ0ZTQxOGI4YzEzMzYxNGEzMDg4N3AxMTkzMzA@powerful-ewe-19330.upstash.io:6379"
+REDIS_URL=""
 ```
 
 ### Running Locally

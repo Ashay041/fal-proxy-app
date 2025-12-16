@@ -15,14 +15,59 @@
 
         <form id="imageForm">
             <div class="form-group">
-                <label for="imageUrl">Image URL</label>
-                <input
-                    type="url"
-                    id="imageUrl"
-                    name="imageUrl"
-                    placeholder="https://example.com/image.jpg"
-                    required
-                >
+                <label>Image Input</label>
+
+                <!-- Tab Switcher -->
+                <div class="input-tabs">
+                    <button type="button" class="tab-btn active" data-tab="url">URL</button>
+                    <button type="button" class="tab-btn" data-tab="upload">Upload</button>
+                </div>
+
+                <!-- URL Input Tab -->
+                <div class="tab-content active" data-tab-content="url">
+                    <input
+                        type="url"
+                        id="imageUrl"
+                        name="imageUrl"
+                        placeholder="https://example.com/image.jpg"
+                    >
+                </div>
+
+                <!-- Upload Input Tab -->
+                <div class="tab-content" data-tab-content="upload">
+                    <div class="upload-area" id="uploadArea">
+                        <input
+                            type="file"
+                            id="imageFile"
+                            name="imageFile"
+                            accept="image/jpeg,image/png,image/jpg"
+                            hidden
+                        >
+                        <div class="upload-placeholder" id="uploadPlaceholder">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p class="upload-text">Drag & drop an image here</p>
+                            <p class="upload-subtext">or click to browse</p>
+                            <p class="upload-limits">JPEG, PNG • Max 10MB</p>
+                        </div>
+                        <div class="upload-preview hidden" id="uploadPreview">
+                            <img id="previewImage" alt="Preview">
+                            <div class="preview-info">
+                                <p id="previewFilename"></p>
+                                <button type="button" class="remove-btn" id="removeImage">Remove</button>
+                            </div>
+                        </div>
+                        <div class="upload-progress hidden" id="uploadProgress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <p class="progress-text" id="progressText">Uploading...</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="form-group">
@@ -43,6 +88,139 @@
                     <option value="kontext/max">Kontext Max (High Quality)</option>
                     <option value="kontext/dev">Kontext Dev (Experimental)</option>
                 </select>
+            </div>
+
+            <!-- Advanced Options -->
+            <div class="advanced-section">
+                <button type="button" class="advanced-toggle" id="advancedToggle">
+                    <span>Advanced Options</span>
+                    <span class="arrow">▼</span>
+                </button>
+
+                <div class="advanced-content hidden" id="advancedContent">
+                    <!-- Image Generation -->
+                    <div class="options-group">
+                        <h3>Image Generation</h3>
+
+                        <div class="form-group-inline">
+                            <label for="numImages">Number of Images</label>
+                            <input type="number" id="numImages" name="numImages" min="1" max="4" placeholder="1">
+                        </div>
+
+                        <div class="form-group-inline">
+                            <label for="seed">Seed</label>
+                            <input type="number" id="seed" name="seed" placeholder="Random">
+                        </div>
+
+                        <div class="form-group-inline">
+                            <label for="outputFormat">Output Format</label>
+                            <select id="outputFormat" name="outputFormat">
+                                <option value="">Default</option>
+                                <option value="jpeg">JPEG</option>
+                                <option value="png">PNG</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Quality & Performance -->
+                    <div class="options-group">
+                        <h3>Quality & Performance</h3>
+
+                        <div class="form-group-inline">
+                            <label for="guidanceScale">Guidance Scale</label>
+                            <input type="number" id="guidanceScale" name="guidanceScale" step="0.1" min="0" max="20" placeholder="Default">
+                        </div>
+
+                        <div class="form-group-inline" data-models="kontext/dev">
+                            <label for="numInferenceSteps">Inference Steps</label>
+                            <input type="number" id="numInferenceSteps" name="numInferenceSteps" min="10" max="50" placeholder="Default (28)">
+                        </div>
+
+                        <div class="form-group-inline" data-models="kontext/dev">
+                            <label for="acceleration">Acceleration</label>
+                            <select id="acceleration" name="acceleration">
+                                <option value="">Default (None)</option>
+                                <option value="none">None</option>
+                                <option value="regular">Regular</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Aspect Ratio & Resolution -->
+                    <div class="options-group">
+                        <h3>Aspect Ratio & Resolution</h3>
+
+                        <div class="form-group-inline" data-models="kontext,kontext/max">
+                            <label for="aspectRatio">Aspect Ratio</label>
+                            <select id="aspectRatio" name="aspectRatio">
+                                <option value="">Default</option>
+                                <option value="1:1">1:1 (Square)</option>
+                                <option value="16:9">16:9 (Landscape)</option>
+                                <option value="9:16">9:16 (Portrait)</option>
+                                <option value="4:3">4:3</option>
+                                <option value="3:4">3:4</option>
+                                <option value="21:9">21:9 (Ultrawide)</option>
+                                <option value="9:21">9:21</option>
+                                <option value="3:2">3:2</option>
+                                <option value="2:3">2:3</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group-inline" data-models="kontext/dev">
+                            <label for="resolutionMode">Resolution Mode</label>
+                            <select id="resolutionMode" name="resolutionMode">
+                                <option value="">Default (Match Input)</option>
+                                <option value="auto">Auto</option>
+                                <option value="match_input">Match Input</option>
+                                <option value="1:1">1:1</option>
+                                <option value="16:9">16:9</option>
+                                <option value="9:16">9:16</option>
+                                <option value="4:3">4:3</option>
+                                <option value="3:4">3:4</option>
+                                <option value="21:9">21:9</option>
+                                <option value="9:21">9:21</option>
+                                <option value="3:2">3:2</option>
+                                <option value="2:3">2:3</option>
+                                <option value="4:5">4:5</option>
+                                <option value="5:4">5:4</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Safety & Enhancement -->
+                    <div class="options-group">
+                        <h3>Safety & Enhancement</h3>
+
+                        <div class="form-group-inline" data-models="kontext,kontext/max">
+                            <label for="safetyTolerance">Safety Tolerance</label>
+                            <select id="safetyTolerance" name="safetyTolerance">
+                                <option value="">Default (2)</option>
+                                <option value="1">1 (Strictest)</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6 (Most Permissive)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group-checkbox" data-models="kontext/dev">
+                            <input type="checkbox" id="enableSafetyChecker" name="enableSafetyChecker">
+                            <label for="enableSafetyChecker">Enable Safety Checker</label>
+                        </div>
+
+                        <div class="form-group-checkbox">
+                            <input type="checkbox" id="enhancePrompt" name="enhancePrompt">
+                            <label for="enhancePrompt">Enhance Prompt</label>
+                        </div>
+
+                        <div class="form-group-checkbox">
+                            <input type="checkbox" id="syncMode" name="syncMode">
+                            <label for="syncMode">Synchronous Mode</label>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <button type="submit" id="submitBtn">

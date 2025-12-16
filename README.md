@@ -125,7 +125,7 @@ The application will start on `http://localhost:8000`
 
 ### 3.2 Request Flow (IMPORTANT)
 
-![image.png](attachment:777582c6-cf82-4141-a2d7-c31faa4de18c:image.png)
+[Backend Flow](https://drive.google.com/file/d/1ZWrLxGvdsevy7e_AH2y2YbCTyVWgEJk9/view)
 
 ---
 

@@ -136,7 +136,7 @@ async def process_kontext_request(request: ImageRequest, fal_model_path: str) ->
             detail="Failed to process input image. Please check the input and try again."
         )
 
-    # STEP 2: Upload input image to Supabase (SAME for both)
+    # STEP 2: Upload input image to Supabase and get public URL (SAME for both)
     try:
         public_input_image_url = await save_image(user_source_image_bytes)
     except ValueError as e:

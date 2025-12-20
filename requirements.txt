@@ -3,6 +3,7 @@ uvicorn[standard]>=0.24.0    #uvicorn server
 httpx>=0.25.0    #http client for async requests
 python-dotenv>=1.0.0    #set environment variables
 fal-client>=0.4.0    #fal client
+slowapi>=0.1.9    #rate limiting for fastapi
 
 # PostgreSQL dependencies
 sqlalchemy>=2.0.0

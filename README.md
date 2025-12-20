@@ -56,6 +56,7 @@ This is a web application that makes it easy to transform images using AI. You u
 ### What's Under the Hood
 
 Built with FastAPI, talks to FAL AI for the actual image generation, uses Redis to cache results, stores images on Supabase, and runs on Render's cloud platform. GitHub Actions automatically tests and deploys new code.
+
 ---
 
 ## 2. Setup and Running Locally

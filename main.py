@@ -1,10 +1,15 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
 from dotenv import load_dotenv
 import os
 from typing import Optional, Literal
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Internal services
 from services.image_service import download_image, save_image
@@ -35,7 +40,13 @@ if not FAL_KEY:
 
 Base.metadata.create_all(bind=engine)
 
+# Rate limiting configuration
+# Uses IP address to track request rates and prevent abuse
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="fal proxy app")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -229,18 +240,21 @@ async def health():
 
 
 @app.post("/kontext")
-async def kontext_endpoint(request: ImageRequest):
+@limiter.limit("5/minute")
+async def kontext_endpoint(request: Request, image_request: ImageRequest):
     """Standard kontext endpoint that accepts image_url or image_data with prompt"""
-    return await process_kontext_request(request, FAL_ENDPOINT_CONFIG["kontext"])
+    return await process_kontext_request(image_request, FAL_ENDPOINT_CONFIG["kontext"])
 
 
 @app.post("/kontext/max")
-async def kontext_max_endpoint(request: ImageRequest):
+@limiter.limit("5/minute")
+async def kontext_max_endpoint(request: Request, image_request: ImageRequest):
     """Max quality kontext endpoint that accepts image_url or image_data with prompt"""
-    return await process_kontext_request(request, FAL_ENDPOINT_CONFIG["kontext-max"])
+    return await process_kontext_request(image_request, FAL_ENDPOINT_CONFIG["kontext-max"])
 
 
 @app.post("/kontext/dev")
-async def kontext_dev_endpoint(request: ImageRequest):
+@limiter.limit("5/minute")
+async def kontext_dev_endpoint(request: Request, image_request: ImageRequest):
     """Dev kontext endpoint that accepts image_url or image_data with prompt"""
-    return await process_kontext_request(request, FAL_ENDPOINT_CONFIG["kontext-dev"])
+    return await process_kontext_request(image_request, FAL_ENDPOINT_CONFIG["kontext-dev"])

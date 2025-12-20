@@ -1,6 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, AsyncMock
+import os
+
+# Use SQLite in-memory database for tests
+# This prevents database connection errors in CI/CD environments
+os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+
 from main import app
 
 

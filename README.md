@@ -1,6 +1,5 @@
-# FAL AI Proxy Application - Documentation
-
-# Table of context
+# [FAL AI Proxy Application - Documentation](https://distinct-driver-eb0.notion.site/fal-proxy-app-documentation-2cb5dcb41f3c80dc9a0eddc91b0e8c5a)
+## Table of context
 
 **1. Introduction**
 
@@ -38,6 +37,14 @@
 
 This is a web application that makes it easy to transform images using AI. You upload a photo, describe what changes you want, and get back AI-generated results - all without worrying about the technical complexity behind the scenes.
 
+### Try it out:
+
+**Live Demo:** [https://fal-proxy-app.onrender.com](https://fal-proxy-app.onrender.com)
+
+ **Github** : [https://github.com/Ashay041/fal-proxy-app](https://github.com/Ashay041/fal-proxy-app)
+
+> Heads up: The app is on Render's free tier, so the first visit might take about a minute to wake up. After that, it's fast.
+
 ### Main Features
 
 * **Two ways to provide images:** Paste a URL or upload a file directly
@@ -49,15 +56,6 @@ This is a web application that makes it easy to transform images using AI. You u
 ### What's Under the Hood
 
 Built with FastAPI, talks to FAL AI for the actual image generation, uses Redis to cache results, stores images on Supabase, and runs on Render's cloud platform. GitHub Actions automatically tests and deploys new code.
-
-### Try it out:
-
-**Live Demo:** [https://fal-proxy-app.onrender.com](https://fal-proxy-app.onrender.com)
-
- **Github** : [https://github.com/Ashay041/fal-proxy-app](https://github.com/Ashay041/fal-proxy-app)
-
-> Heads up: The app is on Render's free tier, so the first visit might take about a minute to wake up. After that, it's fast.
-
 ---
 
 ## 2. Setup and Running Locally

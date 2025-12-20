@@ -1,4 +1,5 @@
 # [FAL AI Proxy Application - Documentation](https://distinct-driver-eb0.notion.site/fal-proxy-app-documentation-2cb5dcb41f3c80dc9a0eddc91b0e8c5a)
+
 ## Table of context
 
 **1. Introduction**
@@ -15,6 +16,20 @@
 * Request Flow (IMPORTANT)
 
 **4. High-Level Design Trade-offs (IMPORTANT)**
+
+* Asynchronous Architecture
+* Unified Processing Function
+* Magic Bytes for Image Type Detection
+* Chunked Image Downloads
+* Retry Logic with Tenacity
+* Dual Input Method Support
+* Redis Caching with SHA256 Hashing
+* Base64 Encoding for File Uploads
+* Frontend and Backend Validation
+* CI/CD Pipeline
+* Persistent Storage
+* Parameter Filtering
+* Rate Limiting Strategy
 
 **5. REST APIs**
 
@@ -39,9 +54,9 @@ This is a web application that makes it easy to transform images using AI. You u
 
 ### Try it out:
 
-**Live Demo:** [https://fal-proxy-app.onrender.com](https://fal-proxy-app.onrender.com)
+**Live Demo:** [https://fal-proxy-app.onrender.com](https://fal-proxy-app.onrender.com/)
 
- **Github** : [https://github.com/Ashay041/fal-proxy-app](https://github.com/Ashay041/fal-proxy-app)
+**Github** : [https://github.com/Ashay041/fal-proxy-app](https://github.com/Ashay041/fal-proxy-app)
 
 > Heads up: The app is on Render's free tier, so the first visit might take about a minute to wake up. After that, it's fast.
 
@@ -52,6 +67,7 @@ This is a web application that makes it easy to transform images using AI. You u
 * **Handles failures gracefully:** If the AI service is temporarily down or slow, the app automatically retries instead of just failing
 * **Stores everything reliably:** All images (yours and generated ones) are saved to Supabase cloud storage, so they don't disappear
 * **Three AI model options:** Choose between base quality, max quality, or development versions
+* **Abuse Prevention:** IP-based rate limiting prevents bots from draining the API budget, ensuring fair access for all users.
 
 ### What's Under the Hood
 
@@ -75,7 +91,9 @@ Create a `.env` file in the root directory with the following credentials:
 
 Ask me at koradiaashay@gmail.com for my .env file if you wish to try running locally
 
-```bash
+**Bash**
+
+```
 # FAL AI Configuration
 FAL_KEY=""
 # Supabase Configuration
@@ -91,13 +109,17 @@ REDIS_URL=""
 
 1. Make the run script executable:
 
-```bash
+**Bash**
+
+```
 chmod +x run.sh
 ```
 
 1. Execute the application:
 
-```bash
+**Bash**
+
+```
 ./run.sh
 ```
 
@@ -109,7 +131,7 @@ The application will start on `http://localhost:8000`
 
 ### 3.1 Tech Stack
 
-| Technology               | Purpose                                                            |
+| **Technology**     | **Purpose**                                                  |
 | ------------------------ | ------------------------------------------------------------------ |
 | **FastAPI**        | Async web framework for building REST APIs                         |
 | **Supabase**       | Cloud storage for uploaded and generated images                    |
@@ -118,6 +140,7 @@ The application will start on `http://localhost:8000`
 | **Neon DB**        | Serverless PostgreSQL database for metadata storage                |
 | **HTTPX**          | Async HTTP client for downloading images and calling external APIs |
 | **Tenacity**       | Retry logic library for handling API failures                      |
+| **SlowAPI**        | Rate limiting extension for FastAPI to prevent abuse               |
 | **Pytest**         | Testing framework for unit tests                                   |
 | **GitHub Actions** | CI/CD pipeline for automated testing                               |
 | **Render**         | Cloud platform for deployment and hosting                          |
@@ -214,6 +237,13 @@ The application will start on `http://localhost:8000`
 3. **Reason:** Even though all three endpoints use the Kontext model family, they have different capabilities and accept different parameters. For example, one variant might support certain advanced settings while another doesn't. If we send unsupported parameters, the FAL API might  **throw errors or behave unexpectedly** . By filtering to only send parameters that each variant accepts, we prevent API errors and keep the system working reliably. This also makes it easy to add new Kontext variants in the future - just add their parameter whitelist to the configuration.
 4. **Tradeoffs:** We have to maintain a **configuration mapping** of which parameters each endpoint variant accepts. This requires updating the config when FAL AI changes their API. But this prevents runtime API errors and makes the system more robust and maintainable.
 
+### 4.13 Rate Limiting Strategy
+
+1. **Question:** How do we prevent abuse and manage the costs of external AI API calls?
+2. **Decision taken:** We implemented IP-based rate limiting using  **SlowAPI** , restricting users to **5 requests per minute** on generation endpoints.
+3. **Reason:** The FAL AI API charges per image generation. Without limits, a malicious bot or a buggy script could drain our project budget in minutes. A limit of 5 requests per minute is generous enough for manual human testing but strict enough to stop automated spam. We specifically excluded the `/health` and root endpoints so monitoring tools don't get blocked.
+4. **Tradeoffs:** Users sharing the same public IP address (like in a coffee shop or office) might collectively hit the limit faster. However, protecting the budget and ensuring availability for everyone is the priority for this deployment.
+
 ---
 
 ## 5. REST APIs
@@ -225,13 +255,13 @@ The application will start on `http://localhost:8000`
 
 ### Endpoints
 
-| Endpoint         | Method | Description                                                         |
-| ---------------- | ------ | ------------------------------------------------------------------- |
-| `/kontext`     | POST   | Generate images using FAL Kontext base model                        |
-| `/kontext/max` | POST   | Generate images using FAL Kontext Max variant (enhanced quality)    |
-| `/kontext/dev` | POST   | Generate images using FAL Kontext Dev variant (development/testing) |
-| `/health`      | GET    | Health check endpoint - returns server status                       |
-| `/`            | GET    | Serves the web application UI                                       |
+| **Endpoint** | **Method** | **Description**                                               |
+| ------------------ | ---------------- | ------------------------------------------------------------------- |
+| `/kontext`       | POST             | Generate images using FAL Kontext base model                        |
+| `/kontext/max`   | POST             | Generate images using FAL Kontext Max variant (enhanced quality)    |
+| `/kontext/dev`   | POST             | Generate images using FAL Kontext Dev variant (development/testing) |
+| `/health`        | GET              | Health check endpoint - returns server status                       |
+| `/`              | GET              | Serves the web application UI                                       |
 
 ### Request Format
 
@@ -239,7 +269,9 @@ The application will start on `http://localhost:8000`
 
 **Note:** Exactly one of `image_url` OR `image_data` must be provided (not both, not neither).
 
-```json
+**JSON**
+
+```
 {
   "image_url": "<https://example.com/image.jpg>",  // Option 1: Image URL
   "image_data": "base64_encoded_image_string",   // Option 2: Base64 file upload
@@ -266,7 +298,9 @@ The application will start on `http://localhost:8000`
 
 **1. Using Image URL:**
 
-```json
+**JSON**
+
+```
 {
   "image_url": "<https://example.com/cat.jpg>",
   "prompt": "transform into a cartoon style"
@@ -276,7 +310,9 @@ The application will start on `http://localhost:8000`
 
 **2. Using File Upload (Base64):**
 
-```json
+**JSON**
+
+```
 {
   "image_data": "iVBORw0KGgoAAAANSUhEUgAAAAUA...",
   "prompt": "make it look like a painting",
@@ -288,7 +324,9 @@ The application will start on `http://localhost:8000`
 
 **3. Using Advanced Options:**
 
-```json
+**JSON**
+
+```
 {
   "image_url": "<https://example.com/portrait.jpg>",
   "prompt": "professional headshot style",
@@ -305,7 +343,9 @@ The application will start on `http://localhost:8000`
 
 **Success Response (200 OK):**
 
-```json
+**JSON**
+
+```
 {
   "images": [
     {
@@ -331,12 +371,13 @@ The application will start on `http://localhost:8000`
 
 ### Status Codes
 
-| Code | Meaning               | Common Causes                                                        |
-| ---- | --------------------- | -------------------------------------------------------------------- |
-| 200  | Success               | Request processed successfully                                       |
-| 400  | Bad Request           | Invalid input, missing required fields, file too large, wrong format |
-| 500  | Internal Server Error | FAL API failure, Supabase storage failure, network issues            |
-| 503  | Service Unavailable   | FAL API is down or experiencing issues                               |
+| **Code** | **Meaning**     | **Common Causes**                                              |
+| -------------- | --------------------- | -------------------------------------------------------------------- |
+| 200            | Success               | Request processed successfully                                       |
+| 400            | Bad Request           | Invalid input, missing required fields, file too large, wrong format |
+| 429            | Too Many Requests     | Rate limit exceeded (max 5 requests per minute)                      |
+| 500            | Internal Server Error | FAL API failure, Supabase storage failure, network issues            |
+| 503            | Service Unavailable   | FAL API is down or experiencing issues                               |
 
 ### Validation Rules
 
@@ -364,7 +405,9 @@ The application will start on `http://localhost:8000`
 
 **Basic request with URL:**
 
-```bash
+**Bash**
+
+```
 curl -X POST <https://fal-proxy-app.onrender.com/kontext> \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -376,7 +419,9 @@ curl -X POST <https://fal-proxy-app.onrender.com/kontext> \\
 
 **Request with advanced options:**
 
-```bash
+**Bash**
+
+```
 curl -X POST <https://fal-proxy-app.onrender.com/kontext/max> \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -440,7 +485,8 @@ Each module has a clear, focused purpose:
 **I shared my app to my family and friends to get real feedback**
 
 The current implementation works well. There is a reliable proxy, smart caching, dual input support. But as usage grows, three questions emerge:
- **"How do we know when things break?"** ,  **"How do we handle more traffic?"** , and **"What do users actually need?"**
+
+"How do we know when things break?" ,  "How do we handle more traffic?" , and "What do users actually need?"
 
 ---
 
@@ -499,7 +545,7 @@ The current implementation works well. There is a reliable proxy, smart caching,
 
 ### 7.5 Developer Experience
 
-1. **Better error messages** - "[fal.ai](http://fal.ai) timeout (30s)" not "had a problem"
+1. **Better error messages** - "[fal.ai](http://fal.ai/) timeout (30s)" not "had a problem"
 2. **Single config file** - All settings in one place
 3. **Integration tests** - Catch breaking changes early
 
@@ -511,15 +557,13 @@ The current implementation works well. There is a reliable proxy, smart caching,
 
 **Don't build until users ask:**
 
-* User auth
-* Rate limiting
-* Microservices
+* **User Authentication:** Forcing logins kills conversion. IP-based rate limiting is sufficient for preventing abuse without adding friction.
+* **Microservices:** Breaking the app into pieces adds deployment headaches. A single, organized codebase ("Modular Monolith") is easier to host and debug.
+* **Payment Integration:** Building billing systems is premature. We focused on technical functionality over monetization features.
+* **Native Mobile Apps:** Maintaining iOS and Android codebases triples the workload. The current web app works perfectly on mobile browsers.
+* **Admin Dashboard:** We don't need custom admin panels. We use Supabase's built-in database viewer and Render's logs for full observability with zero code.
 
-**Principle:** Build when needed, not what sounds cool.
-
----
-
-**Developing Philosophy:** Make it work. Make it observable. Make it fast. In that order.
+**Guiding Principle:** Build for the problems you have  *now* , not the problems you hope to have in two years.
 
 ---
 
